@@ -629,19 +629,17 @@ services = [
         'containers': [
             {
                 'name': 'webhooks',
-                'image': 'kspckan/webhooks',
+                'entrypoint': ['.local/bin/gunicorn', '-b', '0.0.0.0:5000'],
+                'command': ['netkan.webhooks:create_app()'],
+                'ports': ['5000'],
                 'memory': '156',
                 'secrets': [
-                    'SSH_KEY', 'GH_Token', 'XKAN_GHSECRET',
-                    'IA_access', 'IA_secret',
+                    'XKAN_GHSECRET',
                 ],
                 'env': [
-                    ('CKAN_meta', CKANMETA_REMOTE),
-                    ('NetKAN', NETKAN_REMOTE),
-                    ('IA_collection', 'kspckanmods'),
-                ],
-                'volumes': [
-                    ('ckan_cache', '/home/netkan/ckan_cache')
+                    ('NETKAN_REMOTE', NETKAN_REMOTE),
+                    ('AWS_DEFAULT_REGION', Sub('${AWS::Region}')),
+                    ('INFLATION_SQS_QUEUE', GetAtt(inbound, 'QueueName')),
                 ],
             },
             {
@@ -654,7 +652,7 @@ services = [
                 'depends': 'webhooks',
             },
         ]
-    }
+    },
 ]
 
 for service in services:
@@ -673,6 +671,7 @@ for service in services:
     for container in containers:
         secrets = container.get('secrets', [])
         envs = container.get('env', [])
+        entrypoint = container.get('entrypoint')
         command = container.get('command')
         volumes = container.get('volumes', [])
         ports = container.get('ports', [])
@@ -699,6 +698,9 @@ for service in services:
             DependsOn=[],
             Links=[],
         )
+        if entrypoint:
+            entrypoint = entrypoint if isinstance(entrypoint, list) else [entrypoint]
+            definition.EntryPoint = entrypoint
         if command:
             command = command if isinstance(command, list) else [command]
             definition.Command = command
